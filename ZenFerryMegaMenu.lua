@@ -214,385 +214,135 @@ end)
 -- LOGIKA LENGKAP: FLY PANEL & SISTEM PENERBANGAN (V30)
 -- =========================================================
 
+-- =========================================================
+-- ZEN/FERRY V30 - AUTO-FINDER & LOGICAL CORE
+-- =========================================================
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-
+local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
-local flySpeed = 50
+
+-- Global State Variables
 local isFlying = false
-local flyConnection = nil
-local bodyVel, bodyGyro = nil, nil
+local isESP = false
+local isNoclip = false
+local currentSpeed = 16
+local espColorIndex = 1
 
--- Kontrol Gerak
-local moveState = {
-    forward = 0, backward = 0, left = 0, right = 0, up = 0, down = 0
+local espColors = {
+    Color3.fromRGB(255, 0, 0),    -- Merah
+    Color3.fromRGB(0, 255, 0),    -- Hijau
+    Color3.fromRGB(0, 0, 255),    -- Biru
+    Color3.fromRGB(255, 255, 0),  -- Kuning
+    Color3.fromRGB(0, 255, 255)   -- Cyan
 }
+local espColorNames = {"Merah", "Hijau", "Biru", "Kuning", "Cyan"}
 
--- Update Tampilan Speed di UI
-local function updateSpeedDisplay()
-    if btnFlySpeed then
-        btnFlySpeed.Text = "Speed: " .. tostring(flySpeed)
-    end
-end
-
--- Fungsi Menghentikan Terbang
-local function stopFlying()
-    isFlying = false
-    if flyConnection then
-        flyConnection:Disconnect()
-        flyConnection = nil
-    end
-    if bodyVel then bodyVel:Destroy() bodyVel = nil end
-    if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
-    
-    local char = LocalPlayer.Character
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.PlatformStand = false
-        end
-    end
-    
-    if btnFlyToggle then
-        btnFlyToggle.Text = "Flight: OFF"
-        btnFlyToggle.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
-    end
-end
-
--- Fungsi Memulai Terbang
-local function startFlying()
-    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    
-    if not hrp or not hum then return end
-    
-    isFlying = true
-    hum.PlatformStand = true
-
-    -- Membuat mover objects
-    bodyVel = Instance.new("BodyVelocity")
-    bodyVel.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-    bodyVel.Velocity = Vector3.zero
-    bodyVel.Parent = hrp
-
-    bodyGyro = Instance.new("BodyGyro")
-    bodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-    bodyGyro.P = 9000
-    bodyGyro.CFrame = hrp.CFrame
-    bodyGyro.Parent = hrp
-
-    if btnFlyToggle then
-        btnFlyToggle.Text = "Flight: ON"
-        btnFlyToggle.BackgroundColor3 = Color3.fromRGB(40, 150, 40)
-    end
-
-    -- Loop Pergerakan Terbang
-    flyConnection = RunService.RenderStepped:Connect(function()
-        if not isFlying or not hrp or not hrp.Parent then
-            stopFlying()
-            return
-        end
-        
-        local camera = workspace.CurrentCamera
-        local moveDir = Vector3.zero
-        
-        -- Deteksi Input Pergerakan Standard
-        local forward = moveState.forward
-        local backward = moveState.backward
-        local left = moveState.left
-        local right = moveState.right
-        local up = moveState.up
-        local down = moveState.down
-
-        -- Integrasi Keyboard PC
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then forward = 1 end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then backward = 1 end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then left = 1 end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then right = 1 end
-        if UserInputService:IsKeyDown(Enum.KeyCode.E) or UserInputService:IsKeyDown(Enum.KeyCode.Space) then up = 1 end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Q) then down = 1 end
-
-        -- Hitung arah gerakan sesuai arah Kamera
-        local camCF = camera.CFrame
-        local flyVector = (camCF.LookVector * (forward - backward)) + 
-                          (camCF.RightVector * (right - left)) + 
-                          (Vector3.new(0, 1, 0) * (up - down))
-        
-        if flyVector.Magnitude > 0 then
-            bodyVel.Velocity = flyVector.Unit * flySpeed
-        else
-            bodyVel.Velocity = Vector3.zero
-        end
-
-        bodyGyro.CFrame = camCF
-    end)
-end
-
--- Toggle On/Off Terbang dari Tombol Flight Toggle
-if btnFlyToggle then
-    btnFlyToggle.Activated:Connect(function()
-        if isFlying then
-            stopFlying()
-        else
-            startFlying()
-        end
-    end)
-end
-
--- Pengatur Speed (+ / -)
-if btnFlyUpSpeed then
-    btnFlyUpSpeed.Activated:Connect(function()
-        flySpeed = math.min(500, flySpeed + 10)
-        updateSpeedDisplay()
-    end)
-end
-
-if btnFlyDownSpeed then
-    btnFlyDownSpeed.Activated:Connect(function()
-        flySpeed = math.max(10, flySpeed - 10)
-        updateSpeedDisplay()
-    end)
-end
-
--- Tombol Naik (Up) & Turun (Down) di Fly Panel (Cocok Buat HP/Mobile)
-if btnFlyUp then
-    btnFlyUp.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            moveState.up = 1
-        end
-    end)
-    btnFlyUp.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            moveState.up = 0
-        end
-    end)
-end
-
-if btnFlyDown then
-    btnFlyDown.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            moveState.down = 1
-        end
-    end)
-    btnFlyDown.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            moveState.down = 0
-        end
-    end)
-end
-
--- Reset state terbang jika karakter respawn/mati
-LocalPlayer.CharacterAdded:Connect(function()
-    stopFlying()
-end)
-
-updateSpeedDisplay()
 -- =========================================================
--- LOGIKA LENGKAP: ESP SYSTEM & COLOR CUSTOMIZER
+-- HELPER: UTILITY UNTUK NGAIL TOMBOL BERDASARKAN TEKS
 -- =========================================================
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
-
--- Status & Warna Default
-local espEnabled = false
-local espColor = Color3.fromRGB(255, 50, 50) -- Warna default (Merah Vibrant)
-local espObjects = {}
-
--- Fungsi Membuat ESP untuk 1 Player
-local function createESP(player)
-    if player == LocalPlayer then return end
-
-    local function applyESP(character)
-        if not character then return end
-        local hrp = character:WaitForChild("HumanoidRootPart", 5)
-        local hum = character:WaitForChild("Humanoid", 5)
-        if not hrp or not hum then return end
-
-        -- 1. Highlight Effect (Tembus Dinding)
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "ESPHighlight"
-        highlight.Adornee = character
-        highlight.FillColor = espColor
-        highlight.FillTransparency = 0.5
-        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-        highlight.OutlineTransparency = 0
-        highlight.Enabled = espEnabled
-        highlight.Parent = character
-
-        -- 2. BillboardGui (Teks Nama & Health)
-        local billboard = Instance.new("BillboardGui")
-        billboard.Name = "ESPInfo"
-        billboard.Adornee = hrp
-        billboard.Size = UDim2.new(0, 200, 0, 50)
-        billboard.StudsOffset = Vector3.new(0, 3, 0)
-        billboard.AlwaysOnTop = true
-        billboard.Enabled = espEnabled
-
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, 0, 1, 0)
-        label.BackgroundTransparency = 1
-        label.TextColor3 = espColor
-        label.TextStrokeTransparency = 0
-        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        label.Font = Enum.Font.SourceSansBold
-        label.TextSize = 14
-        label.Parent = billboard
-
-        billboard.Parent = character
-
-        -- Simpan referensi objek
-        espObjects[player] = {
-            highlight = highlight,
-            billboard = billboard,
-            label = label,
-            character = character,
-            humanoid = hum,
-            hrp = hrp
-        }
-    end
-
-    if player.Character then
-        applyESP(player.Character)
-    end
-    player.CharacterAdded:Connect(applyESP)
-end
-
--- Fungsi Hapus ESP Player
-local function removeESP(player)
-    if espObjects[player] then
-        if espObjects[player].highlight then espObjects[player].highlight:Destroy() end
-        if espObjects[player].billboard then espObjects[player].billboard:Destroy() end
-        espObjects[player] = nil
-    end
-end
-
--- Load ESP untuk Semua Player yang Ada & Baru Masuk
-for _, player in ipairs(Players:GetPlayers()) do
-    createESP(player)
-end
-Players.PlayerAdded:Connect(createESP)
-Players.PlayerRemoving:Connect(removeESP)
-
--- Update Loop (Distance & Health Realtime)
-RunService.RenderStepped:Connect(function()
-    if not espEnabled then return end
-    
-    local myChar = LocalPlayer.Character
-    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-
-    for player, data in pairs(espObjects) do
-        if data.character and data.character.Parent and data.humanoid.Health > 0 and data.hrp then
-            local distance = myHrp and math.floor((myHrp.Position - data.hrp.Position).Magnitude) or 0
-            local hp = math.floor(data.humanoid.Health)
-            
-            data.label.Text = string.format("%s\n[%d HP] - %dm", player.DisplayName, hp, distance)
-            data.highlight.Enabled = true
-            data.billboard.Enabled = true
-        else
-            if data.highlight then data.highlight.Enabled = false end
-            if data.billboard then data.billboard.Enabled = false end
+local function findButtonByText(partialText)
+    for _, gui in pairs(LocalPlayer:WaitForChild("PlayerGui"):GetDescendants()) do
+        if (gui:IsA("TextButton") or gui:IsA("TextLabel")) and string.find(gui.Text:lower(), partialText:lower()) then
+            return gui
         end
     end
-end)
-
--- Update Warna ESP Secara Global
-local function updateESPColor(newColor)
-    espColor = newColor
-    for _, data in pairs(espObjects) do
-        if data.highlight then data.highlight.FillColor = newColor end
-        if data.label then data.label.TextColor3 = newColor end
-    end
+    return nil
 end
 
 -- =========================================================
--- INTEGRASI TOMBOL UI ESP & COLOR
+-- 1. LOGIKA SPEED SYSTEM (WALKSPEED)
 -- =========================================================
-
--- Toggle Button ESP
-if btnESPToggle then
-    btnESPToggle.Activated:Connect(function()
-        espEnabled = not espEnabled
-        btnESPToggle.Text = espEnabled and "ESP: ON" or "ESP: OFF"
-        btnESPToggle.BackgroundColor3 = espEnabled and Color3.fromRGB(40, 150, 40) or Color3.fromRGB(150, 40, 40)
-        
-        for _, data in pairs(espObjects) do
-            if data.highlight then data.highlight.Enabled = espEnabled end
-            if data.billboard then data.billboard.Enabled = espEnabled end
-        end
-    end)
-end
-
--- Pilihan Warna ESP (Preset Color Buttons)
-if btnColorRed then
-    btnColorRed.Activated:Connect(function() updateESPColor(Color3.fromRGB(255, 50, 50)) end)
-end
-if btnColorGreen then
-    btnColorGreen.Activated:Connect(function() updateESPColor(Color3.fromRGB(50, 255, 50)) end)
-end
-if btnColorBlue then
-    btnColorBlue.Activated:Connect(function() updateESPColor(Color3.fromRGB(50, 150, 255)) end)
-end
-if btnColorYellow then
-    btnColorYellow.Activated:Connect(function() updateESPColor(Color3.fromRGB(255, 255, 50)) end)
-end
-if btnColorCyan then
-    btnColorCyan.Activated:Connect(function() updateESPColor(Color3.fromRGB(50, 255, 255)) end)
-end
--- =========================================================
--- LOGIKA LENGKAP: SPEED SYSTEM (WALKSPEED)
--- =========================================================
-
-local currentSpeed = 16 -- Default WalkSpeed Roblox
-local minSpeed, maxSpeed, speedStep = 16, 250, 5
-
--- Fungsi Terapkan & Update Speed ke Karakter
 local function applySpeed(speed)
-    currentSpeed = math.clamp(speed, minSpeed, maxSpeed)
+    currentSpeed = math.clamp(speed, 16, 250)
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChildOfClass("Humanoid") then
+        char:FindFirstChildOfClass("Humanoid").WalkSpeed = currentSpeed
+    end
     
-    local character = LocalPlayer.Character
-    if character then
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid.WalkSpeed = currentSpeed
+    local btnDisplay = findButtonByText("speed:")
+    if btnDisplay then
+        btnDisplay.Text = "⚡ Speed: " .. currentSpeed
+    end
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    local hum = char:WaitForChild("Humanoid", 5)
+    if hum then hum.WalkSpeed = currentSpeed end
+end)
+
+-- =========================================================
+-- 2. LOGIKA ESP & COLOR PICKER
+-- =========================================================
+local function updateESP()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local char = player.Character
+            local hl = char:FindFirstChild("ZenESP_Highlight")
+            
+            if isESP then
+                if not hl then
+                    hl = Instance.new("Highlight")
+                    hl.Name = "ZenESP_Highlight"
+                    hl.Parent = char
+                end
+                hl.FillColor = espColors[espColorIndex]
+                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+            else
+                if hl then hl:Destroy() end
+            end
         end
     end
 end
 
--- Update Teks Display Speed di UI (Menyesuaikan teks tombol di UI kamu)
-local function updateSpeedDisplay()
-    if btnSpeedDisplay then -- Sesuaikan nama variabel teks/tombol speed di UI-mu jika beda
-        btnSpeedDisplay.Text = "⚡ Speed: " .. currentSpeed
-    end
-end
+-- =========================================================
+-- 3. BINDING OTOMATIS KE TOMBOL UI
+-- =========================================================
+task.spawn(function()
+    task.wait(1) -- Tunggu UI ter-load sempurna
 
--- Event saat karakter mati/respawn, pasang ulang WalkSpeed-nya
-LocalPlayer.CharacterAdded:Connect(function(character)
-    local humanoid = character:WaitForChild("Humanoid", 5)
-    if humanoid then
-        humanoid.WalkSpeed = currentSpeed
+    -- [A] FLY TOGGLE
+    local btnFly = findButtonByText("fly mode")
+    if btnFly then
+        btnFly.MouseButton1Click:Connect(function()
+            isFlying = not isFlying
+            btnFly.Text = "🦅 Fly Mode: " .. (isFlying and "ON" or "OFF")
+            -- Panggil fungsi Fly Handler kamu di sini
+        end)
+    end
+
+    -- [B] ESP TOGGLE
+    local btnESP = findButtonByText("esp:")
+    if btnESP then
+        btnESP.MouseButton1Click:Connect(function()
+            isESP = not isESP
+            btnESP.Text = "👁️ ESP: " .. (isESP and "ON" or "OFF")
+            updateESP()
+        end)
+    end
+
+    -- [C] COLOR PICKER TOGGLE
+    local btnColor = findButtonByText("color:")
+    if btnColor then
+        btnColor.MouseButton1Click:Connect(function()
+            espColorIndex = (espColorIndex % #espColors) + 1
+            btnColor.Text = "🎨 Color: " .. espColorNames[espColorIndex]
+            if isESP then updateESP() end
+        end)
+    end
+
+    -- [D] SPEED MINUS (-)
+    -- Mencari tombol "-" yang posisinya sebaris/dekat dengan Speed
+    for _, btn in pairs(LocalPlayer.PlayerGui:GetDescendants()) do
+        if btn:IsA("TextButton") and btn.Text == "-" then
+            btn.MouseButton1Click:Connect(function()
+                applySpeed(currentSpeed - 5)
+            end)
+        elseif btn:IsA("TextButton") and btn.Text == "+" then
+            btn.MouseButton1Click:Connect(function()
+                applySpeed(currentSpeed + 5)
+            end)
+        end
     end
 end)
-
--- =========================================================
--- INTEGRASI TOMBOL UI SPEED (+ / -)
--- =========================================================
-
--- Tombol Kurang (-) Speed
-if btnSpeedMinus then
-    btnSpeedMinus.Activated:Connect(function()
-        applySpeed(currentSpeed - speedStep)
-        updateSpeedDisplay()
-    end)
-end
-
--- Tombol Tambah (+) Speed
-if btnSpeedPlus then
-    btnSpeedPlus.Activated:Connect(function()
-        applySpeed(currentSpeed + speedStep)
-        updateSpeedDisplay()
-    end)
-end
