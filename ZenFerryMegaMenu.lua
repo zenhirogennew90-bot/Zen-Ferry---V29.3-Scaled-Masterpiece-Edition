@@ -152,6 +152,37 @@ local btnESP       = createButtonUI("BtnESP", "👁️ ESP: OFF")
 local btnColor     = createButtonUI("BtnColor", "🎨 Color: Merah")
 local btnFly       = createButtonUI("BtnFly", "✈️ Fly Mode: OFF")
 
+=========================================================
+-- BUILD FLY PANEL (YANG MUNCUL SAAT FLY ON)
+-- =========================================================
+local flyPanel = Instance.new("Frame")
+flyPanel.Name = "FlyPanel"
+flyPanel.Size = UDim2.new(0, 240, 0, 220)
+flyPanel.Position = UDim2.new(0.2, 0, 0.3, 0)
+flyPanel.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+flyPanel.Visible = false -- Sembunyikan dulu sampai Fly dinyalakan
+flyPanel.Active = true
+flyPanel.Draggable = true
+flyPanel.Parent = flyGui
+Instance.new("UICorner", flyPanel).CornerRadius = UDim.new(0, 8)
+local flyStroke = Instance.new("UIStroke")
+flyStroke.Color = Color3.fromRGB(0, 170, 255)
+flyStroke.Thickness = 2
+flyStroke.Parent = flyPanel
+
+local flyTitle = Instance.new("TextLabel")
+flyTitle.Size = UDim2.new(1, 0, 0, 30)
+flyTitle.BackgroundTransparency = 1
+flyTitle.Text = "✈️ Fly Panel"
+flyTitle.TextColor3 = Color3.fromRGB(0, 170, 255)
+flyTitle.TextSize = 15
+flyTitle.Font = Enum.Font.SourceSansBold
+flyTitle.Parent = flyPanel
+
+local btnCloseFly = createButtonUI("BtnCloseFly", "❌ Matikan Fly")
+btnCloseFly.Size = UDim2.new(1, -20, 0, 32)
+btnCloseFly.Position = UDim2.new(0, 10, 0, 175)
+btnCloseFly.Parent = flyPanel
 
 -- =========================================================
 -- BAGIAN 2: LOGIC & FUNCTIONALITY (LOGIKANYA DI BAWAH)
@@ -216,6 +247,104 @@ local function refreshESP()
     end
 end
 
+local espEnabled = false
+local noclipEnabled = false
+local flyEnabled = false
+local walkSpeed = 16
+local flySpeed = 50
+local spectatingTarget = nil
+
+local colors = {
+    Color3.fromRGB(255, 50, 50),
+    Color3.fromRGB(50, 255, 50),
+    Color3.fromRGB(50, 150, 255),
+    Color3.fromRGB(255, 255, 50)
+}
+local colorNames = {"Merah", "Hijau", "Biru", "Kuning"}
+local colorIndex = 1
+
+local espFolder = workspace:FindFirstChild("ZenFerryESP") or Instance.new("Folder", workspace)
+espFolder.Name = "ZenFerryESP"
+
+-- 1. LOGIC SPEED
+local function updateSpeed(newSpeed)
+    walkSpeed = math.max(16, newSpeed)
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = walkSpeed
+    end
+end
+
+-- 2. LOGIC NOCLIP & FLY LOOP
+RunService.Stepped:Connect(function()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("Humanoid") then
+        if char.Humanoid.WalkSpeed ~= walkSpeed and not flyEnabled then
+            char.Humanoid.WalkSpeed = walkSpeed
+        end
+        
+        if noclipEnabled then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
+            end
+        end
+        
+        -- Fly Engine Physics
+        if flyEnabled and char:FindFirstChild("HumanoidRootPart") then
+            local hrp = char.HumanoidRootPart
+            hrp.Velocity = Vector3.new(0, 1, 0) -- Anti gravity sederhana
+        end
+    end
+end)
+
+-- 3. LOGIC ESP
+local function refreshESP()
+    espFolder:ClearAllChildren()
+    if not espEnabled then return end
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local hl = Instance.new("Highlight")
+            hl.Name = player.Name
+            hl.Adornee = player.Character
+            hl.FillColor = colors[colorIndex]
+            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+            hl.FillTransparency = 0.5
+            hl.Parent = espFolder
+        end
+    end
+end
+
+-- 4. LOGIC SPECTATE (Melihat player lain bergantian)
+local function toggleSpectate()
+    local playersList = Players:GetPlayers()
+    if not spectatingTarget then
+        for _, p in pairs(playersList) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                spectatingTarget = p
+                workspace.CurrentCamera.CameraSubject = p.Character.Humanoid
+                btnSpectate.Text = "👁️ Spectating: " .. p.Name
+                btnSpectate.TextColor3 = Color3.fromRGB(0, 255, 120)
+                break
+            end
+        end
+    else
+        workspace.CurrentCamera.CameraSubject = LocalPlayer.Character.Humanoid
+        btnSpectate.Text = "👁️ Spectate"
+        btnSpectate.TextColor3 = Color3.fromRGB(240, 240, 240)
+        spectatingTarget = nil
+    end
+end
+
+-- 5. LOGIC TELEPORT TO MOUSE (Teleport instan ke arah kursor/posisi depan)
+local function teleportToMouse()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local mouse = LocalPlayer:GetMouse()
+        if mouse.Hit then
+            char.HumanoidRootPart.CFrame = mouse.Hit + Vector3.new(0, 3, 0)
+        end
+    end
+end
+
 -- =========================================================
 -- SAMBUNGAN LOGIC KE TOMBOL UI
 -- =========================================================
@@ -265,4 +394,22 @@ end)
 
 btnTeleport.MouseButton1Click:Connect(function()
     print("[Zen/Ferry] Teleport Triggered")
+end)
+
+-- Tombol Fly Mode Utama di Menu
+local function triggerFly()
+    flyEnabled = not flyEnabled
+    btnFly.Text = "✈️ Fly Mode: " .. (flyEnabled and "ON" or "OFF")
+    btnFly.TextColor3 = flyEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(240, 240, 240)
+    flyPanel.Visible = flyEnabled -- Memunculkan / Menyembunyikan Fly Panel di layar!
+end
+
+btnFly.MouseButton1Click:Connect(triggerFly)
+btnCloseFly.MouseButton1Click:Connect(triggerFly)
+
+btnSpectate.MouseButton1Click:Connect(toggleSpectate)
+btnTeleport.MouseButton1Click:Connect(teleportToMouse)
+btnRefresh.MouseButton1Click:Connect(function()
+    refreshESP()
+    print("[Zen/Ferry] UI Refreshed!")
 end)
