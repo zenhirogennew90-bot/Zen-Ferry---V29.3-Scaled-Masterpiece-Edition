@@ -210,139 +210,79 @@ end)
 -- =========================================================
 -- [BAGIAN LOGIKA / PERINTAH MANUAL DITARUH DI BAWAH SINI]
 -- =========================================================
--- =========================================================
--- LOGIKA LENGKAP: FLY PANEL & SISTEM PENERBANGAN (V30)
--- =========================================================
 
 -- =========================================================
--- ZEN/FERRY V30 - AUTO-FINDER & LOGICAL CORE
+-- LOGIKA AUTO-BINDING ULTIMATE (ZEN/FERRY V30)
 -- =========================================================
-
+local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 
--- Global State Variables
-local isFlying = false
-local isESP = false
-local isNoclip = false
-local currentSpeed = 16
-local espColorIndex = 1
-
-local espColors = {
-    Color3.fromRGB(255, 0, 0),    -- Merah
-    Color3.fromRGB(0, 255, 0),    -- Hijau
-    Color3.fromRGB(0, 0, 255),    -- Biru
-    Color3.fromRGB(255, 255, 0),  -- Kuning
-    Color3.fromRGB(0, 255, 255)   -- Cyan
-}
-local espColorNames = {"Merah", "Hijau", "Biru", "Kuning", "Cyan"}
-
--- =========================================================
--- HELPER: UTILITY UNTUK NGAIL TOMBOL BERDASARKAN TEKS
--- =========================================================
-local function findButtonByText(partialText)
-    for _, gui in pairs(LocalPlayer:WaitForChild("PlayerGui"):GetDescendants()) do
-        if (gui:IsA("TextButton") or gui:IsA("TextLabel")) and string.find(gui.Text:lower(), partialText:lower()) then
-            return gui
-        end
-    end
-    return nil
+-- Cari ScreenGui ZenFerry
+local function getGui()
+    return CoreGui:FindFirstChild("ZenFerry") or LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("ZenFerry") or CoreGui:FindFirstChildOfClass("ScreenGui")
 end
 
--- =========================================================
--- 1. LOGIKA SPEED SYSTEM (WALKSPEED)
--- =========================================================
-local function applySpeed(speed)
-    currentSpeed = math.clamp(speed, 16, 250)
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChildOfClass("Humanoid") then
-        char:FindFirstChildOfClass("Humanoid").WalkSpeed = currentSpeed
-    end
-    
-    local btnDisplay = findButtonByText("speed:")
-    if btnDisplay then
-        btnDisplay.Text = "⚡ Speed: " .. currentSpeed
-    end
-end
+local gui = getGui()
+if not gui then return end
 
-LocalPlayer.CharacterAdded:Connect(function(char)
-    local hum = char:WaitForChild("Humanoid", 5)
-    if hum then hum.WalkSpeed = currentSpeed end
-end)
+-- Variable State
+local espEnabled = false
+local noclipEnabled = false
+local walkSpeed = 16
+local colors = {Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 0, 255), Color3.fromRGB(255, 255, 0)}
+local colorNames = {"Merah", "Hijau", "Biru", "Kuning"}
+local colorIndex = 1
 
--- =========================================================
--- 2. LOGIKA ESP & COLOR PICKER
--- =========================================================
-local function updateESP()
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            local char = player.Character
-            local hl = char:FindFirstChild("ZenESP_Highlight")
+-- Loop semua tombol di UI
+for _, btn in pairs(gui:GetDescendants()) do
+    if btn:IsA("TextButton") then
+        local text = btn.Text
+        
+        -- 1. TOGGLE ESP
+        if text:find("ESP") then
+            btn.MouseButton1Click:Connect(function()
+                espEnabled = not espEnabled
+                btn.Text = "👁️ ESP: " .. (espEnabled and "ON" or "OFF")
+                -- Masukkan fungsi ESP kamu di sini
+            end)
             
-            if isESP then
-                if not hl then
-                    hl = Instance.new("Highlight")
-                    hl.Name = "ZenESP_Highlight"
-                    hl.Parent = char
+        -- 2. TOGGLE NOCLIP
+        elseif text:find("Noclip") then
+            btn.MouseButton1Click:Connect(function()
+                noclipEnabled = not noclipEnabled
+                btn.Text = "👻 Noclip: " .. (noclipEnabled and "ON" or "OFF")
+            end)
+            
+        -- 3. SPEED CONTROL (+) & (-)
+        elseif text == "+" then
+            btn.MouseButton1Click:Connect(function()
+                walkSpeed = walkSpeed + 5
+                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                    LocalPlayer.Character.Humanoid.WalkSpeed = walkSpeed
                 end
-                hl.FillColor = espColors[espColorIndex]
-                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-            else
-                if hl then hl:Destroy() end
-            end
+            end)
+        elseif text == "-" then
+            btn.MouseButton1Click:Connect(function()
+                walkSpeed = math.max(16, walkSpeed - 5)
+                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                    LocalPlayer.Character.Humanoid.WalkSpeed = walkSpeed
+                end
+            end)
+            
+        -- 4. COLOR PICKER
+        elseif text:find("Color") then
+            btn.MouseButton1Click:Connect(function()
+                colorIndex = (colorIndex % #colors) + 1
+                btn.Text = "🎨 Color: " .. colorNames[colorIndex]
+            end)
+            
+        -- 5. FLY PANEL TOGGLES
+        elseif text:find("Fly Mode") or text:find("Matikan Fly") then
+            btn.MouseButton1Click:Connect(function()
+                print("Tombol Fly Diklik!")
+                -- Trigger fungsi fly
+            end)
         end
     end
 end
-
--- =========================================================
--- 3. BINDING OTOMATIS KE TOMBOL UI
--- =========================================================
-task.spawn(function()
-    task.wait(1) -- Tunggu UI ter-load sempurna
-
-    -- [A] FLY TOGGLE
-    local btnFly = findButtonByText("fly mode")
-    if btnFly then
-        btnFly.MouseButton1Click:Connect(function()
-            isFlying = not isFlying
-            btnFly.Text = "🦅 Fly Mode: " .. (isFlying and "ON" or "OFF")
-            -- Panggil fungsi Fly Handler kamu di sini
-        end)
-    end
-
-    -- [B] ESP TOGGLE
-    local btnESP = findButtonByText("esp:")
-    if btnESP then
-        btnESP.MouseButton1Click:Connect(function()
-            isESP = not isESP
-            btnESP.Text = "👁️ ESP: " .. (isESP and "ON" or "OFF")
-            updateESP()
-        end)
-    end
-
-    -- [C] COLOR PICKER TOGGLE
-    local btnColor = findButtonByText("color:")
-    if btnColor then
-        btnColor.MouseButton1Click:Connect(function()
-            espColorIndex = (espColorIndex % #espColors) + 1
-            btnColor.Text = "🎨 Color: " .. espColorNames[espColorIndex]
-            if isESP then updateESP() end
-        end)
-    end
-
-    -- [D] SPEED MINUS (-)
-    -- Mencari tombol "-" yang posisinya sebaris/dekat dengan Speed
-    for _, btn in pairs(LocalPlayer.PlayerGui:GetDescendants()) do
-        if btn:IsA("TextButton") and btn.Text == "-" then
-            btn.MouseButton1Click:Connect(function()
-                applySpeed(currentSpeed - 5)
-            end)
-        elseif btn:IsA("TextButton") and btn.Text == "+" then
-            btn.MouseButton1Click:Connect(function()
-                applySpeed(currentSpeed + 5)
-            end)
-        end
-    end
-end)
